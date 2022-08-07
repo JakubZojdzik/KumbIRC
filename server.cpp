@@ -1,18 +1,33 @@
+#include <thread>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 #define PORT 8080
+
+int server_fd, new_socket, valread;
+
+void listen_client()
+{
+    // printf("lets gooo\n");
+    while (1)
+    {
+        char buffer[1024] = {0};
+        read(new_socket, buffer, 1024);
+        if(buffer[0] != 0)
+            printf("Received:\n%s\n", buffer);
+    }
+}
 
 int main(int argc, char const *argv[])
 {
-    int server_fd, new_socket, valread;
     struct sockaddr_in address;
     int opt = 1;
     int addrlen = sizeof(address);
-    char buffer[1024] = {0};
+    
     char *hello = strdup("Hello from server");
 
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
@@ -46,6 +61,9 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
     
+    std::thread listening(listen_client);
+    listening.detach();
+
     char inp[32];
     while (1)
     {
@@ -53,9 +71,6 @@ int main(int argc, char const *argv[])
         scanf("%s", inp);
         send(new_socket, inp, strlen(inp), 0);
         printf("sent!\n");
-
-        read(new_socket, buffer, 1024);
-        printf("Received:\n%s\n", buffer);
     }
     close(new_socket);
     shutdown(server_fd, SHUT_RDWR);
