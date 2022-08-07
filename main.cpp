@@ -3,6 +3,77 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+
+typedef char Int8;
+typedef short int Int16;
+typedef int Int32;
+typedef unsigned char UInt8;
+typedef unsigned short int UInt16;
+typedef unsigned int UInt32;
+
+struct sockaddr_in serv_addr;
+int sockfd;
+
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}
+
+bool sendmsg(char *message)
+{
+    if (send(sockfd, message, strlen(message), 0) == -1)
+        return 1;
+    else
+        return 0;
+}
+
+void connectIRC(char *address, int port, char *user, char *nick1, char *nick2 = strdup(""), char *nick3 = strdup(""))
+{
+    int valread, client_fd;
+    struct sockaddr_in serv_addr;
+    char *hello = strdup("Hello from client");
+    char buffer[1024] = {0};
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        printf("\n Socket creation error \n");
+    }
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, address, &serv_addr.sin_addr) <= 0)
+    {
+        printf( "\nInvalid address/ Address not supported \n");
+    }
+
+    if ((client_fd = connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
+    {
+        printf("\nConnection Failed \n");
+    }
+
+    char *message = strcat(strdup("NICK "), nick1);
+    if (sendmsg(message))
+        error("ERROR while handling sendto");
+}
+
+int main(int argc, char const *argv[])
+{
+
+    char *address = strdup("127.0.0.1");
+    char *message = strdup("dupa\0\0\0\0");
+    char *user = strdup("Jakub");
+    char *nick = strdup("Kumber");
+    int port = 8080;
+
+    connectIRC(address, port, user, nick);
+
+    char buffer[1024] = {0};
+    while (1)
+    {
+        read(sockfd, buffer, 1024);
+        printf("Received:\n%s\n", buffer);
+    }
+}
 
 /*
     Commands:
@@ -35,61 +106,3 @@
         1. (john -> server) PRIVMSG rory :Wahts up Rory?
         2. (server -> rory) :john!john@foo.example.com PRIVMSG rory :Whats up Rory?
 */
-
-struct sockaddr_in serv_addr;
-int sockfd;
-
-void error(const char *msg)
-{
-    perror(msg);
-    exit(1);
-}
-
-bool sendmsg(char *message)
-{
-    for(int i = 0; i < strlen(message) % 8; i++)
-        message = strcat(message, '\0');
-    if (sendto(sockfd, message, sizeof(message), MSG_EOR, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-        return 1;
-    else
-        return 0;
-}
-
-int connectIRC(char *address, int port, char *user, char *nick1, char *nick2 = "", char *nick3 = "")
-{
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("ERROR while opening socket");
-    
-    struct hostent *server;
-    server = gethostbyname(address);
-    if (server == NULL)
-        error("ERROR, no such host\n");
-
-    bzero((char *)&serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-    serv_addr.sin_port = htons(port);
-
-    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-        error("ERROR while setting up connecting");
-
-
-    char *message = strcat("NICK ", nick1);
-    if (sendmsg(message))
-        error("ERROR while handling sendto");
-
-    return sockfd;
-}
-
-int main()
-{
-
-    char *address = "127.0.0.1";
-    char *message = "dupa\0\0\0\0";
-    char *user = "Jakub";
-    char *nick = "Kumber";
-    int port = 1234;
-
-    close(connectIRC(address, port, user, nick));
-}
