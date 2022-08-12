@@ -18,7 +18,7 @@ void listen_client()
         char buffer[1024] = {0};
         read(new_socket, buffer, 1024);
         if(buffer[0] != 0)
-            printf("Received:\n%s\n", buffer);
+            printf("%s\n", buffer);
     }
 }
 
@@ -65,12 +65,11 @@ int main(int argc, char const *argv[])
     listening.detach();
 
     char inp[32];
+    printf("connected :))\n");
     while (1)
     {
-        printf("petla\n");
         scanf("%s", inp);
         send(new_socket, inp, strlen(inp), 0);
-        printf("sent!\n");
     }
     close(new_socket);
     shutdown(server_fd, SHUT_RDWR);
