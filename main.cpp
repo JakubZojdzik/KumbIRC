@@ -18,40 +18,31 @@ void error(const char *msg)
     exit(1);
 }
 
-std::vector<char *> get_response()
+std::vector<char *> parse_response()
 {
-    printf("odbieram\n");
-    char result[512];
-    memset(buffer, 0, sizeof(buffer));
-    int nDataLength;
-    while ((nDataLength = recv(sockfd, buffer, 512, 0)) > 0)
-    {
-        strcat(result, buffer);
-        strcat(result, " ");
-    }
-    printf("Oto rezultat: %s\n", result);
-
+    printf("parsing\n%s\n", buffer);
     std::vector<char *> v;
-    if (result[0] == '\0')
+    if (buffer[0] == '\0')
         return v;
     bool colon = false;
-    char temp[512];
-    char xd[1];
-    for (int i = 0; i < strlen(result); i++)
+    char temp[512] = {0};
+    printf("halo\n");
+    for (int i = 0; i < strlen(buffer); i++)
     {
-        if ((!colon && result[i] == ' ') || (i == strlen(result)))
+        printf("i = %i\n", i);
+        if ((!colon && buffer[i] == ' ') || (i == strlen(buffer)))
         {
-            printf(temp);
+            printf("space\n");
             v.push_back(temp);
             memset(temp, 0, 512);
             continue;
         }
-        if (i > 0 && result[i] == ':')
+        if (i > 0 && buffer[i] == ':')
         {
             colon = true;
         }
-        xd[0] = result[i];
-        strcat(temp, xd);
+        strcat(temp, &(buffer[i]));
+        printf("temp=%s\n", temp);
     }
     return v;
 }
@@ -89,7 +80,10 @@ void connectIRC(char *address, int port, char *user, char *nick)
     snprintf(message, 512, "NICK %s\n\r", nick);
     sendmsg(message);
 
-    std::vector<char *> parsed = get_response();
+    memset(buffer, 0, sizeof(buffer));
+    read(sockfd, buffer, 512);
+
+    std::vector<char *> parsed = parse_response();
     printf("po\n");
     for (auto x : parsed)
     {
@@ -103,19 +97,12 @@ void connectIRC(char *address, int port, char *user, char *nick)
 
 int main(int argc, char const *argv[])
 {
-
     char *address = strdup("127.0.0.1");
-    char *user = strdup("Jakub");
+    char *user = strdup("Jakub 123");
     char *nick = strdup("Kumber");
     int port = 8080;
-    connectIRC(address, port, user, nick);
 
-    while (1)
-    {
-        memset(buffer, 0, sizeof(buffer));
-        read(sockfd, buffer, 512);
-        printf("Received:\n%s\n", buffer);
-    }
+    connectIRC(address, port, user, nick);
 }
 
 /*
@@ -139,10 +126,10 @@ int main(int argc, char const *argv[])
 
     Connect to server:
         1. Send: `NICK john`
-        2. Send: `USER john * * :John Junior
-        3. Receive: `:bar.example.com 001 john :Welcome to the Internet Relay Network john!john@foo.example.com
+        2. Send: `USER john * * :John Junior`
+        3. Receive: `:bar.example.com 001 john :Welcome to the Internet Relay Network john!john@foo.example.com`
          or
-        2. Receive: `:bar.example.com 433 john * :Nickname is already in use
+        2. Receive: `:bar.example.com 433 john * :Nickname is already in use`
 
 
     Private message from john to rory:

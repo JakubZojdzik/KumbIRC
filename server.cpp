@@ -12,7 +12,6 @@ int server_fd, new_socket, valread;
 
 void listen_client()
 {
-    // printf("lets gooo\n");
     while (1)
     {
         char buffer[1024] = {0};
@@ -66,6 +65,9 @@ int main(int argc, char const *argv[])
 
     char inp[32];
     printf("connected :))\n");
+
+    char *msg = ":bar.example.com 433 john * :Nickname is already in use";
+    send(new_socket, msg, strlen(msg), 0);
     while (1)
     {
         scanf("%s", inp);
