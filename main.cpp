@@ -20,30 +20,45 @@ void error(const char *msg)
 
 std::vector<char *> parse_response()
 {
-    printf("parsing\n%s\n", buffer);
+    printf("parsing\n%s\n", buffer, strlen(buffer));
     std::vector<char *> v;
     if (buffer[0] == '\0')
         return v;
     bool colon = false;
     char temp[512] = {0};
+    int j = 0;
     printf("halo\n");
+
     for (int i = 0; i < strlen(buffer); i++)
     {
-        printf("i = %i\n", i);
-        if ((!colon && buffer[i] == ' ') || (i == strlen(buffer)))
+        // printf("i=%i\n", i);
+        // printf("le=%i\n", strlen(buffer));
+        if (buffer[i] == ' ' && !colon)
         {
-            printf("space\n");
+            printf("pushuje:\n%s\n\n", temp);
             v.push_back(temp);
             memset(temp, 0, 512);
+            j = 0;
             continue;
         }
-        if (i > 0 && buffer[i] == ':')
+        if (buffer[i] == ':' && i > 0 && !colon)
         {
-            colon = true;
+            if (i > 0)
+                colon = true;
+            continue;
         }
-        strcat(temp, &(buffer[i]));
-        printf("temp=%s\n", temp);
+        temp[j] = buffer[i];
+        printf("temp=  %s\n", temp);
+        j++;
     }
+    // printf("pushuje:\n%s\n\n", temp);
+    // v.push_back(temp);
+    printf("z funkcji:\n");
+    for (int i = 0; i < v.size(); i++)
+    {
+        printf("%s;;; ", v[i]);
+    }
+    printf("\n\n");
     return v;
 }
 
@@ -87,7 +102,7 @@ void connectIRC(char *address, int port, char *user, char *nick)
     printf("po\n");
     for (auto x : parsed)
     {
-        printf("%s ", x);
+        printf("%s;;; ", x);
     }
     memset(message, 0, sizeof(message));
 
