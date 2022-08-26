@@ -66,7 +66,7 @@ int main(int argc, char const *argv[])
     char inp[32];
     printf("connected :))\n");
 
-    char *msg = strdup(":bar.example.com 433 john * :Nickname is already in use");
+    char *msg = strdup(":bar.example.com 001 john :Welcome to the Internet Relay Network john!john@foo.example.com");
     send(new_socket, msg, strlen(msg), 0);
     while (1)
     {

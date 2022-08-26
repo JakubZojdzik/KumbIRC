@@ -7,9 +7,13 @@
 #include <arpa/inet.h>
 #include <thread>
 
+const char* NICK_IN_USE = "433";
+const char* LOGIN_OK = "001";
+
 struct sockaddr_in serv_addr;
 int sockfd;
 char buffer[512] = {0};
+char response[16][512];
 
 void error(const char *msg)
 {
@@ -17,21 +21,33 @@ void error(const char *msg)
     exit(1);
 }
 
-size_t parse_response(char res[16][512])
+int parse_response()
 {
-    printf("parsing\n%s\n", buffer, strlen(buffer));
+    memset(buffer, 0, sizeof(buffer));
+    read(sockfd, buffer, 512);
+    printf("parsing:%s\n", buffer);
     if (buffer[0] == '\0')
-        return;
+        return 0;
     bool colon = false;
     char temp[512] = {0};
     int j = 0, k = 0;
 
-    for (int i = 0; i < strlen(buffer); i++)
+    for (int i = 0; i <= strlen(buffer); i++)
     {
+        if(i == strlen(buffer))
+        {
+            memset(response[k], 0, 512);
+            strcpy(response[k], temp);
+            printf("dowalam %s\n", temp);
+            k++;
+            memset(temp, 0, 512);
+            break;
+        }
         if (buffer[i] == ' ' && !colon)
         {
-            memset(res[k], 0, 512);
-            strcpy(res[k], temp);
+            memset(response[k], 0, 512);
+            strcpy(response[k], temp);
+            printf("dowalam %s\n", temp);
             k++;
             memset(temp, 0, 512);
             j = 0;
@@ -57,7 +73,15 @@ bool sendmsg(char *message)
         return 0;
 }
 
-void connectIRC(char *address, int port, char *user, char *nick)
+/*
+Output:
+0       Connected
+-1      Connection error
+1       Nick is already in use
+2       Unknown server response
+3       Missing server response
+*/
+int connectIRC(char *address, int port, char *user, char *nick)
 {
     printf("trying to connect\n");
     int valread, client_fd;
@@ -65,37 +89,59 @@ void connectIRC(char *address, int port, char *user, char *nick)
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\n Socket creation error \n");
+        return -1;
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
     if (inet_pton(AF_INET, address, &serv_addr.sin_addr) <= 0)
     {
         printf("\nInvalid address/ Address not supported \n");
+        return -1;
     }
-
     if ((client_fd = connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
     {
         printf("\nConnection Failed \n");
+        return -1;
     }
 
     char message[512];
     snprintf(message, 512, "NICK %s\n\r", nick);
     sendmsg(message);
-
-    memset(buffer, 0, sizeof(buffer));
-    read(sockfd, buffer, 512);
-
-    char parsed[16][512];
-    parse_response(parsed);
-    printf("po\n");
-    for (auto x : parsed)
-    {
-        printf("%s;;; ", x);
-    }
+    
     memset(message, 0, sizeof(message));
-
     snprintf(message, sizeof(message), "USER %s * * :%s\n\r", nick, user);
     sendmsg(message);
+
+
+    size_t res_size = parse_response();
+    for(int i = 0; i < res_size; i++)
+    {
+        printf("%i: %s\n", i, response[i]);
+    }
+    
+    if(res_size >= 3)
+    {
+        if(strcmp(response[1], NICK_IN_USE) == 0)
+        {
+            printf("\nNickname is already in use \n");
+            return 1;
+        }
+        else if(strcmp(response[1], LOGIN_OK) == 0)
+        {
+            printf("\nConnected \n");
+            return 0;
+        }
+        else
+        {
+            printf("\nError: %s\n", buffer);
+            return 2;
+        }
+    }
+    else
+    {
+        printf("\nError \n");
+        return 3;
+    }
 }
 
 int main(int argc, char const *argv[])
