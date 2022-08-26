@@ -6,68 +6,72 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <thread>
+#include <queue>
+#include <string>
+#include <vector>
 
 const char* NICK_IN_USE = "433";
 const char* LOGIN_OK = "001";
 
+std::queue<std::string> to_read;
+
 struct sockaddr_in serv_addr;
 int sockfd;
 char buffer[512] = {0};
-char response[16][512];
 
-void error(const char *msg)
-{
-    perror(msg);
-    exit(1);
-}
-
-int parse_response()
+void get_response()
 {
     memset(buffer, 0, sizeof(buffer));
-    read(sockfd, buffer, 512);
-    printf("parsing:%s\n", buffer);
-    if (buffer[0] == '\0')
-        return 0;
+    while(!buffer[0])
+        read(sockfd, buffer, 512);
+    printf("\n[LST]: buffer: %s\n\n", buffer);
     bool colon = false;
-    char temp[512] = {0};
-    int j = 0, k = 0;
-
-    for (int i = 0; i <= strlen(buffer); i++)
+    std::string temp = "";
+    for(int i = 0; i <= strlen(buffer); i++)
     {
-        if(i == strlen(buffer))
+        if(buffer[i] == '\n' || i == strlen(buffer))
         {
-            memset(response[k], 0, 512);
-            strcpy(response[k], temp);
-            printf("dowalam %s\n", temp);
-            k++;
-            memset(temp, 0, 512);
-            break;
+            to_read.push(temp);
+            temp = "";
         }
-        if (buffer[i] == ' ' && !colon)
+        else
         {
-            memset(response[k], 0, 512);
-            strcpy(response[k], temp);
-            printf("dowalam %s\n", temp);
-            k++;
-            memset(temp, 0, 512);
-            j = 0;
-            continue;
+            temp = temp + buffer[i];
         }
-        if (buffer[i] == ':' && i > 0 && !colon)
-        {
-            if (i > 0)
-                colon = true;
-            continue;
-        }
-        temp[j] = buffer[i];
-        j++;
     }
-    return k;
 }
 
-bool sendmsg(char *message)
+std::vector<std::string> parse_response(std::string resp)
 {
-    if (send(sockfd, message, strlen(message), 0) == -1)
+    std::vector<std::string> w;
+    std::string temp;
+    bool colon = false;
+    for(int i = 0; i <= resp.size(); i++)
+    {
+        if(i == resp.size())
+        {
+            w.push_back(temp);
+            break;
+        }
+        if(i != 0 && resp[i] == ':' && resp[i-1] == ' ')
+        {
+            colon = true;
+            continue;
+        }
+        if(!colon && resp[i] == ' ')
+        {
+            w.push_back(temp);
+            temp = "";
+            continue;
+        }
+        temp = temp + resp[i];
+    }
+    return w;
+}
+
+bool sendmsg(std::string message)
+{
+    if (send(sockfd, message.c_str(), message.size(), 0) == -1)
         return 1;
     else
         return 0;
@@ -81,75 +85,99 @@ Output:
 2       Unknown server response
 3       Missing server response
 */
-int connectIRC(char *address, int port, char *user, char *nick)
+int connectIRC(std::string address, int port, std::string user, std::string nick)
 {
-    printf("trying to connect\n");
+    std::cout << "[CON]: trying to connect\n";
     int valread, client_fd;
     struct sockaddr_in serv_addr;
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        printf("\n Socket creation error \n");
+        std::cout << "\n[CON]: Socket creation error \n";
         return -1;
     }
+    std::cout << "[CON]: sockfd created\n";
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, address, &serv_addr.sin_addr) <= 0)
+    if (inet_pton(AF_INET, address.c_str(), &serv_addr.sin_addr) <= 0)
     {
-        printf("\nInvalid address/ Address not supported \n");
+        std::cout << "\n[CON]: Invalid address/ Address not supported \n";
         return -1;
     }
+    std::cout << "[CON]: inet_pton works\n";
     if ((client_fd = connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
     {
-        printf("\nConnection Failed \n");
+        std::cout << "\n[CON]: Connection Failed \n";
         return -1;
     }
-
-    char message[512];
-    snprintf(message, 512, "NICK %s\n\r", nick);
-    sendmsg(message);
+    std::cout << "[CON]: Connected to ip\n";
     
-    memset(message, 0, sizeof(message));
-    snprintf(message, sizeof(message), "USER %s * * :%s\n\r", nick, user);
+    std::thread listening(get_response);
+    listening.detach();
+
+    std::cout << "[CON]: Listening thread launched\n";
+
+    std::string message = "NICK " + nick + "\n\r";
     sendmsg(message);
 
+    message = "USER " + nick + " * * :" + user + "\n\r";
+    sendmsg(message);
 
-    size_t res_size = parse_response();
-    for(int i = 0; i < res_size; i++)
-    {
-        printf("%i: %s\n", i, response[i]);
-    }
+    std::cout << "[CON]: User data sent\n";
     
-    if(res_size >= 3)
+    get_response();
+    while(!to_read.empty())
     {
-        if(strcmp(response[1], NICK_IN_USE) == 0)
+        std::vector<std::string> act = parse_response(to_read.front());
+        if(act.size() < 2)
         {
-            printf("\nNickname is already in use \n");
-            return 1;
+            std::cout << "Strange response xd\n";
+            for(auto x : act)
+            {
+                std::cout << x << " ";
+            }
+            std::cout << '\n';
+            break;
         }
-        else if(strcmp(response[1], LOGIN_OK) == 0)
+        if(act[1] == "433")
         {
-            printf("\nConnected \n");
+            std::cout << "Nickname is already in use\n";
+            break;
+        }
+        else if(act[1][0] == '4')
+        {
+            std::cout << "EROR: " << act[1] << '\n';
+        }
+        else if(act[1] == "001")
+        {
+            std::cout << "Successfully connected and logged to the server\n";
             return 0;
+        }
+        else if(act[1] == "020")
+        {
+            sleep(1);
         }
         else
         {
-            printf("\nError: %s\n", buffer);
-            return 2;
+            std::cout << "Unknown code:\n" << act[1] << '\n';
         }
+        to_read.pop();
     }
-    else
-    {
-        printf("\nError \n");
-        return 3;
-    }
+    return 1;
 }
 
 int main(int argc, char const *argv[])
 {
-    char *address = strdup("127.0.0.1");
-    char *user = strdup("Jakub 123");
-    char *nick = strdup("Kumber");
-    int port = 8080;
+    // poznan: 150.254.65.52:6667
+    // libera: 176.58.122.119:6697
+    char *address = strdup("150.254.65.52");
+    char *user = strdup("abc abc");
+    char *nick = strdup("abcabcabc");
+    int port = 6667;
+
+    // char *address = strdup("127.0.0.1");
+    // char *user = strdup("Jakub 123");
+    // char *nick = strdup("Kumber");
+    // int port = 8080;
 
     connectIRC(address, port, user, nick);
 }
