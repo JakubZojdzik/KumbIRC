@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <thread>
-#include <vector>
 
 struct sockaddr_in serv_addr;
 int sockfd;
@@ -18,25 +17,22 @@ void error(const char *msg)
     exit(1);
 }
 
-std::vector<char *> parse_response()
+size_t parse_response(char res[16][512])
 {
     printf("parsing\n%s\n", buffer, strlen(buffer));
-    std::vector<char *> v;
     if (buffer[0] == '\0')
-        return v;
+        return;
     bool colon = false;
     char temp[512] = {0};
-    int j = 0;
-    printf("halo\n");
+    int j = 0, k = 0;
 
     for (int i = 0; i < strlen(buffer); i++)
     {
-        // printf("i=%i\n", i);
-        // printf("le=%i\n", strlen(buffer));
         if (buffer[i] == ' ' && !colon)
         {
-            printf("pushuje:\n%s\n\n", temp);
-            v.push_back(temp);
+            memset(res[k], 0, 512);
+            strcpy(res[k], temp);
+            k++;
             memset(temp, 0, 512);
             j = 0;
             continue;
@@ -48,18 +44,9 @@ std::vector<char *> parse_response()
             continue;
         }
         temp[j] = buffer[i];
-        printf("temp=  %s\n", temp);
         j++;
     }
-    // printf("pushuje:\n%s\n\n", temp);
-    // v.push_back(temp);
-    printf("z funkcji:\n");
-    for (int i = 0; i < v.size(); i++)
-    {
-        printf("%s;;; ", v[i]);
-    }
-    printf("\n\n");
-    return v;
+    return k;
 }
 
 bool sendmsg(char *message)
@@ -98,7 +85,8 @@ void connectIRC(char *address, int port, char *user, char *nick)
     memset(buffer, 0, sizeof(buffer));
     read(sockfd, buffer, 512);
 
-    std::vector<char *> parsed = parse_response();
+    char parsed[16][512];
+    parse_response(parsed);
     printf("po\n");
     for (auto x : parsed)
     {
