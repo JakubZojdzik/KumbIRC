@@ -13,33 +13,43 @@
 const char* NICK_IN_USE = "433";
 const char* LOGIN_OK = "001";
 
+std::string nick, user, host, servername, version, date;
+
 std::queue<std::string> to_read;
 
 struct sockaddr_in serv_addr;
 int sockfd;
 char buffer[512] = {0};
+int valread, client_fd;
 
 void get_response()
 {
-    memset(buffer, 0, sizeof(buffer));
-    while(!buffer[0])
-        read(sockfd, buffer, 512);
-    printf("\n[LST]: buffer: %s\n\n", buffer);
-    bool colon = false;
-    std::string temp = "";
-    for(int i = 0; i <= strlen(buffer); i++)
+    std::cout << "[LST]: Starting...\n";
+    while(1)
     {
-        if(buffer[i] == '\n' || i == strlen(buffer))
+        memset(buffer, 0, sizeof(buffer));
+        printf("\n[LST]: Waiting for server's response\n");
+        while(buffer[0] == '\0' || buffer[0] == '\n' || buffer[0] == '\r')
+            read(sockfd, buffer, 512);
+        printf("\n[LST]: buffer: %s\n\n", buffer);
+        bool colon = false;
+        std::string temp = "";
+        for(int i = 0; i <= strlen(buffer); i++)
         {
-            to_read.push(temp);
-            temp = "";
-        }
-        else
-        {
-            temp = temp + buffer[i];
+            if(temp.size() > 2 && (buffer[i] == '\n' || i == strlen(buffer)))
+            {
+                to_read.push(temp);
+                temp = "";
+            }
+            else
+            {
+                temp = temp + buffer[i];
+            }
         }
     }
+    std::cout << "[LST]: Terminating...\n";
 }
+
 
 std::vector<std::string> parse_response(std::string resp)
 {
@@ -69,7 +79,7 @@ std::vector<std::string> parse_response(std::string resp)
     return w;
 }
 
-bool sendmsg(std::string message)
+bool send_command(std::string message)
 {
     if (send(sockfd, message.c_str(), message.size(), 0) == -1)
         return 1;
@@ -85,11 +95,10 @@ Output:
 2       Unknown server response
 3       Missing server response
 */
-int connectIRC(std::string address, int port, std::string user, std::string nick)
+int connectIRC(std::string address, int port, std::string username, std::string nickname)
 {
     std::cout << "[CON]: trying to connect\n";
-    int valread, client_fd;
-    struct sockaddr_in serv_addr;
+    
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         std::cout << "\n[CON]: Socket creation error \n";
@@ -112,25 +121,25 @@ int connectIRC(std::string address, int port, std::string user, std::string nick
     std::cout << "[CON]: Connected to ip\n";
     
     std::thread listening(get_response);
-    listening.detach();
+    
 
     std::cout << "[CON]: Listening thread launched\n";
 
-    std::string message = "NICK " + nick + "\n\r";
-    sendmsg(message);
+    std::string message = "NICK " + nickname + "\n\r";
+    send_command(message);
 
-    message = "USER " + nick + " * * :" + user + "\n\r";
-    sendmsg(message);
-
+    message = "USER " + nickname + " * * :" + username + "\n\r";
+    send_command(message);
     std::cout << "[CON]: User data sent\n";
     
-    get_response();
+
     while(!to_read.empty())
     {
+        std::cout << "[CON]: now - " << to_read.front() << '\n';
         std::vector<std::string> act = parse_response(to_read.front());
         if(act.size() < 2)
         {
-            std::cout << "Strange response xd\n";
+            std::cout << "[CON]: Strange response xd\n";
             for(auto x : act)
             {
                 std::cout << x << " ";
@@ -140,7 +149,7 @@ int connectIRC(std::string address, int port, std::string user, std::string nick
         }
         if(act[1] == "433")
         {
-            std::cout << "Nickname is already in use\n";
+            std::cout << "[CON]: Nickname is already in use\n";
             break;
         }
         else if(act[1][0] == '4')
@@ -149,37 +158,66 @@ int connectIRC(std::string address, int port, std::string user, std::string nick
         }
         else if(act[1] == "001")
         {
-            std::cout << "Successfully connected and logged to the server\n";
+            std::cout << "[CON]: Successfully connected and logged to the server\n";
             return 0;
         }
         else if(act[1] == "020")
         {
-            sleep(1);
+            sleep(3);
         }
         else
         {
-            std::cout << "Unknown code:\n" << act[1] << '\n';
+            std::cout << "[CON]: Unknown code:\n" << act[1] << '\n';
         }
         to_read.pop();
     }
+    std::cout << "[CON]: No server answer\n";
+    listening.join();
     return 1;
 }
 
 int main(int argc, char const *argv[])
 {
-    // poznan: 150.254.65.52:6667
-    // libera: 176.58.122.119:6697
-    char *address = strdup("150.254.65.52");
-    char *user = strdup("abc abc");
-    char *nick = strdup("abcabcabc");
+    // poznan: 150.254.65.52
+    // libera: 176.58.122.119
+    // idk : 188.240.145.20
+    // strutgard: 129.69.5.3
+    std::string address = "150.254.65.52";
+    std::string my_username = strdup("pasd dsad");
+    std::string my_nickname = strdup("mnbvcx");
     int port = 6667;
 
-    // char *address = strdup("127.0.0.1");
-    // char *user = strdup("Jakub 123");
-    // char *nick = strdup("Kumber");
+    // cstd::string address = strdup("127.0.0.1");
+    // std::string user = strdup("Jakub 123");
+    // std::string nick = strdup("Kumber");
     // int port = 8080;
 
-    connectIRC(address, port, user, nick);
+    if(!connectIRC(address, port, my_username, my_nickname))
+    {
+        while (!to_read.empty())
+        {
+            std::cout << "[MAIN]: now - " << to_read.front() << '\n';
+            to_read.pop();
+            sleep(1);
+        }
+        sleep(5);
+        if(!send_command("HELP"))
+            std::cout << "[SEND]: HELP\n";
+        if(!send_command("help"))
+            std::cout << "[SEND]: help\n";
+        if(!send_command("/HELP"))
+            std::cout << "[SEND]: /HELP\n";
+        if(!send_command("/help"))
+            std::cout << "[SEND]: /help\n";
+        while(1)
+        {
+            if(!to_read.empty())
+            {
+                std::cout << "[MAIN]: now - " << to_read.front() << '\n';
+                to_read.pop();
+            }
+        }
+    }
 }
 
 /*
